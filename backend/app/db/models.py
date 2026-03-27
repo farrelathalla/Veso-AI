@@ -58,9 +58,13 @@ class ChatRequest(BaseModel):
     message: str
     use_rag: bool = True
     use_search: bool = False
+    attached_file: Optional[str] = None
 
 
 class AnkiGenerateRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=200)
     additional_context: Optional[str] = Field(None, max_length=30_000)
     max_cards: int = Field(default=20, ge=15, le=25)
+    conversation_id: Optional[str] = None
+    attached_file: Optional[str] = None
+    use_search: bool = False

@@ -20,7 +20,7 @@ def get_conversation_history(conversation_id: str, limit: int = 12) -> list[dict
     db = get_db()
     result = (
         db.table("messages")
-        .select("role, content")
+        .select("role, content, metadata")
         .eq("conversation_id", conversation_id)
         .order("created_at")
         .limit(limit)

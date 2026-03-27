@@ -32,5 +32,12 @@ def retrieve_context(query: str, k: int = 5) -> list[str]:
     return [doc.page_content for doc in docs]
 
 
+def retrieve_from_source(source: str, k: int = 20) -> list[str]:
+    """Return up to k chunks from a specific uploaded file, by metadata filter."""
+    vs = get_vectorstore()
+    results = vs._collection.get(where={"source": source}, limit=k, include=["documents"])
+    return results.get("documents") or []
+
+
 def add_documents(docs: list) -> None:
     get_vectorstore().add_documents(docs)

@@ -40,6 +40,7 @@ export function streamChat(
     conversation_id?: string
     use_rag?: boolean
     use_search?: boolean
+    attached_file?: string
   },
   session: any,
   onToken: (token: string) => void,
@@ -101,7 +102,7 @@ export function streamChat(
 // ── Anki ─────────────────────────────────────────────────────────────────────
 
 export async function generateAnki(
-  payload: { topic: string; additional_context?: string; max_cards?: number },
+  payload: { topic: string; additional_context?: string; max_cards?: number; conversation_id?: string; attached_file?: string; use_search?: boolean },
   session: any,
 ) {
   const res = await fetch(`${BASE}/api/anki/generate`, {
@@ -179,6 +180,18 @@ export async function uploadAndSummarize(
   } catch (err: any) {
     onError?.(err?.message ?? "Upload error")
   }
+}
+
+export async function uploadFile(file: File, session: any): Promise<{ filename: string; chunks_ingested: number }> {
+  const form = new FormData()
+  form.append("file", file)
+  const res = await fetch(`${BASE}/api/pdf/upload`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${(session as any)?.accessToken ?? ""}` },
+    body: form,
+  })
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
+  return res.json()
 }
 
 // ── RAG ───────────────────────────────────────────────────────────────────────

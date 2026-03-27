@@ -20,8 +20,12 @@ export default function ConversationPage() {
   useEffect(() => {
     if (!session || !id) return
     setLoading(true)
-    getMessages(id, session).then(msgs => {
-      setMessages(msgs)
+    getMessages(id, session).then((msgs: any[]) => {
+      setMessages(msgs.map(m => ({
+        ...m,
+        ankiDeck: m.metadata?.ankiDeck ?? undefined,
+        attachedFile: m.metadata?.attachedFile ?? undefined,
+      })))
       setLoading(false)
     })
   }, [session, id])
@@ -30,16 +34,16 @@ export default function ConversationPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  const handleSend = (text: string, opts: { useRag: boolean; useSearch: boolean }) => {
+  const handleSend = (text: string, opts: { useRag: boolean; useSearch: boolean; attachedFile?: string }) => {
     if (!session || streaming) return
     setError(null)
-    const userMsg: Message = { role: "user", content: text }
+    const userMsg: Message = { role: "user", content: text, attachedFile: opts.attachedFile }
     const aiMsg: Message = { role: "assistant", content: "" }
     setMessages(prev => [...prev, userMsg, aiMsg])
     setStreaming(true)
 
     streamChat(
-      { message: text, conversation_id: id, use_rag: opts.useRag, use_search: opts.useSearch },
+      { message: text, conversation_id: id, use_rag: opts.useRag, use_search: opts.useSearch, attached_file: opts.attachedFile },
       session,
       token => setMessages(prev => {
         const updated = [...prev]
@@ -55,6 +59,14 @@ export default function ConversationPage() {
 
   const handleSummary = (summary: string) => {
     setMessages(prev => [...prev, { role: "assistant", content: summary }])
+  }
+
+  const handleAnkiCreated = (deck: { id: string; title: string; card_count: number }, userMessage: { topic: string; attachedFile?: string }) => {
+    setMessages(prev => [
+      ...prev,
+      { role: "user", content: userMessage.topic, attachedFile: userMessage.attachedFile },
+      { role: "assistant", content: "", ankiDeck: deck },
+    ])
   }
 
   if (loading) {
@@ -91,7 +103,7 @@ export default function ConversationPage() {
         <div ref={bottomRef} />
       </div>
 
-      <ChatInput onSend={handleSend} onSummary={handleSummary} disabled={streaming} />
+      <ChatInput onSend={handleSend} onSummary={handleSummary} onAnkiCreated={handleAnkiCreated} disabled={streaming} conversationId={id} />
     </div>
   )
 }

@@ -14,21 +14,22 @@ export default function NewChatPage() {
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const pendingConvId = useRef<string | null>(null)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  const handleSend = (text: string, opts: { useRag: boolean; useSearch: boolean }) => {
+  const handleSend = (text: string, opts: { useRag: boolean; useSearch: boolean; attachedFile?: string }) => {
     if (!session || streaming) return
     setError(null)
-    const userMsg: Message = { role: "user", content: text }
+    const userMsg: Message = { role: "user", content: text, attachedFile: opts.attachedFile }
     const aiMsg: Message = { role: "assistant", content: "" }
     setMessages(prev => [...prev, userMsg, aiMsg])
     setStreaming(true)
 
     streamChat(
-      { message: text, use_rag: opts.useRag, use_search: opts.useSearch },
+      { message: text, use_rag: opts.useRag, use_search: opts.useSearch, attached_file: opts.attachedFile },
       session,
       token => setMessages(prev => {
         const updated = [...prev]
@@ -36,8 +37,11 @@ export default function NewChatPage() {
         updated[updated.length - 1] = { ...last, content: last.content + token }
         return updated
       }),
-      meta => router.replace(`/chat/${meta.conversation_id}`),
-      () => setStreaming(false),
+      meta => { pendingConvId.current = meta.conversation_id },
+      () => {
+        setStreaming(false)
+        if (pendingConvId.current) router.replace(`/chat/${pendingConvId.current}`)
+      },
       err => { setStreaming(false); setError(err) },
     )
   }
@@ -45,6 +49,14 @@ export default function NewChatPage() {
   const handleSummary = (summary: string) => {
     const summaryMsg: Message = { role: "assistant", content: summary }
     setMessages(prev => [...prev, summaryMsg])
+  }
+
+  const handleAnkiCreated = (deck: { id: string; title: string; card_count: number }, userMessage: { topic: string; attachedFile?: string }) => {
+    setMessages(prev => [
+      ...prev,
+      { role: "user", content: userMessage.topic, attachedFile: userMessage.attachedFile },
+      { role: "assistant", content: "", ankiDeck: deck },
+    ])
   }
 
   return (
@@ -82,7 +94,7 @@ export default function NewChatPage() {
         <div ref={bottomRef} />
       </div>
 
-      <ChatInput onSend={handleSend} onSummary={handleSummary} disabled={streaming} />
+      <ChatInput onSend={handleSend} onSummary={handleSummary} onAnkiCreated={handleAnkiCreated} disabled={streaming} />
     </div>
   )
 }

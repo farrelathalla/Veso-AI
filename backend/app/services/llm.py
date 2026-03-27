@@ -18,17 +18,40 @@ Guidelines:
 - Never give definitive diagnoses or definitive treatment instructions
 - When retrieved document context is provided, cite it in your answer
 - Focus on exam-relevant, high-yield information
-- Use simple, clear English — avoid unnecessary complexity"""
+- Use simple, clear English — avoid unnecessary complexity
+
+Formatting rules (strictly enforced):
+- NEVER use Anki cloze deletion syntax in chat responses — no {{c1::...}}, {{c2::...}}, {{c?}}, or any {{...}} patterns
+- NEVER use § section markers (§1, §2, etc.)
+- NEVER suggest phrases like "make Anki cards from §1" or "batch-generate" — the interface has a built-in Anki card button
+- Plain prose and markdown only: bold, headings, bullet lists, numbered lists, code blocks"""
 
 
 def get_llm() -> ChatNVIDIA:
     return ChatNVIDIA(
-        model="moonshotai/kimi-k2.5",
+        model="moonshotai/kimi-k2-instruct",
         api_key=settings.nvidia_api_key,
         temperature=1,
         top_p=1,
-        max_completion_tokens=16384,
+        max_tokens=16384,
     )
+
+
+async def generate_title(text: str) -> str:
+    """Generate a short 3-7 word English title from a user message or topic."""
+    llm = get_llm()
+    try:
+        response = await llm.ainvoke([
+            HumanMessage(content=(
+                "Generate a short 3-7 word English title that captures the main topic of this text. "
+                "Return ONLY the title, no quotes, punctuation, or explanation.\n\n"
+                f"Text: {text[:300]}"
+            ))
+        ])
+        title = str(response.content).strip().strip('"\'.,;:').strip()
+        return title[:80] if title else text[:60]
+    except Exception:
+        return text[:60]
 
 
 async def stream_response(

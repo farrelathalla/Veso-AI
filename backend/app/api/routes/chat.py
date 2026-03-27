@@ -12,8 +12,8 @@ from app.services.chat_service import (
     delete_conversation,
     build_messages_with_context,
 )
-from app.rag.vector_store import retrieve_context
-from app.services.llm import stream_response
+from app.rag.vector_store import retrieve_context, retrieve_from_source
+from app.services.llm import stream_response, generate_title
 from app.agents.search_agent import search_and_answer
 
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -54,7 +54,8 @@ async def chat_stream(req: ChatRequest, user=Depends(current_user)):
     conv_id = get_or_create_conversation(user["id"], req.conversation_id)
 
     # 2. Save user message immediately (before streaming, so it's always persisted)
-    save_message(conv_id, "user", req.message)
+    user_meta = {"attachedFile": req.attached_file} if req.attached_file else {}
+    save_message(conv_id, "user", req.message, metadata=user_meta)
 
     # 3. Load recent history (after saving current message so context is accurate)
     history = get_conversation_history(conv_id, limit=12)
@@ -62,7 +63,11 @@ async def chat_stream(req: ChatRequest, user=Depends(current_user)):
     # 4. RAG retrieval (skipped if use_search=True — search provides its own context)
     rag_context = None
     if req.use_rag and not req.use_search:
-        rag_context = retrieve_context(req.message, k=4)
+        if req.attached_file:
+            # User attached a specific file — retrieve from it directly instead of semantic search
+            rag_context = retrieve_from_source(req.attached_file, k=6)
+        else:
+            rag_context = retrieve_context(req.message, k=4)
 
     # 5. Build message list
     messages = build_messages_with_context(history[:-1], req.message, rag_context)
@@ -86,7 +91,7 @@ async def chat_stream(req: ChatRequest, user=Depends(current_user)):
 
             # Auto-title from first user message
             if len(history) <= 1:
-                title = req.message[:60] + ("..." if len(req.message) > 60 else "")
+                title = await generate_title(req.message)
                 update_conversation_title(conv_id, title)
 
         except Exception:

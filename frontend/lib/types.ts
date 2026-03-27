@@ -10,6 +10,8 @@ export interface Message {
   role: "user" | "assistant"
   content: string
   created_at?: string
+  ankiDeck?: { id: string; title: string; card_count: number }
+  attachedFile?: string
 }
 
 export interface AnkiCard {

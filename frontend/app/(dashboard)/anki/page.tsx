@@ -1,8 +1,8 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState, ChangeEvent } from "react"
 import { useSession } from "next-auth/react"
-import { Plus, BookOpen, Trash2, Loader2 } from "lucide-react"
-import { getAnkiDecks, getDeckCards, generateAnki, deleteDeck } from "@/lib/api"
+import { Plus, BookOpen, Trash2, Loader2, Paperclip, Search, X, FileText } from "lucide-react"
+import { getAnkiDecks, getDeckCards, generateAnki, deleteDeck, uploadFile } from "@/lib/api"
 import { AnkiDeckViewer } from "@/components/anki/AnkiDeckViewer"
 import type { AnkiDeck, AnkiCard } from "@/lib/types"
 
@@ -12,30 +12,69 @@ export default function AnkiPage() {
   const [activeDeck, setActiveDeck] = useState<{ deck: AnkiDeck; cards: AnkiCard[] } | null>(null)
   const [generating, setGenerating] = useState(false)
   const [topic, setTopic] = useState("")
+  const [context, setContext] = useState("")
+  const [attachedFile, setAttachedFile] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [useSearch, setUseSearch] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [genError, setGenError] = useState<string | null>(null)
   const [loadingDeckId, setLoadingDeckId] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (session) getAnkiDecks(session).then(setDecks)
   }, [session])
+
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !session) return
+    setUploading(true)
+    setUploadError(null)
+    try {
+      const result = await uploadFile(file, session)
+      setAttachedFile(result.filename)
+    } catch {
+      setUploadError("Upload failed. Try again.")
+    } finally {
+      setUploading(false)
+    }
+    e.target.value = ""
+  }
 
   const handleGenerate = async () => {
     if (!session || !topic.trim() || generating) return
     setGenError(null)
     setGenerating(true)
     try {
-      const result = await generateAnki({ topic: topic.trim(), max_cards: 20 }, session)
+      const result = await generateAnki({
+        topic: topic.trim(),
+        additional_context: context.trim() || undefined,
+        max_cards: 20,
+        attached_file: attachedFile ?? undefined,
+        use_search: useSearch || undefined,
+      }, session)
       if (result.error) { setGenError(result.error); return }
       const updated = await getAnkiDecks(session)
       setDecks(updated)
       setTopic("")
+      setContext("")
+      setAttachedFile(null)
+      setUseSearch(false)
       setShowNew(false)
     } catch (e: any) {
       setGenError(e?.message ?? "Generation failed")
     } finally {
       setGenerating(false)
     }
+  }
+
+  const resetForm = () => {
+    setShowNew(false)
+    setGenError(null)
+    setUploadError(null)
+    setAttachedFile(null)
+    setUseSearch(false)
   }
 
   const openDeck = async (deck: AnkiDeck) => {
@@ -69,7 +108,7 @@ export default function AnkiPage() {
       <div className="flex items-center justify-between px-5 h-[52px] border-b border-surface-2/50 flex-shrink-0">
         <h1 className="text-neutral font-semibold">Anki Cards</h1>
         <button
-          onClick={() => { setShowNew(true); setGenError(null) }}
+          onClick={() => { setShowNew(true); setGenError(null); setUploadError(null) }}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-primary hover:bg-brand-primary/90 rounded-md text-sm text-white font-medium transition-colors"
         >
           <Plus size={15} strokeWidth={2} />
@@ -82,28 +121,95 @@ export default function AnkiPage() {
         {showNew && (
           <div className="mb-5 p-4 bg-surface-2 rounded-xl border border-surface-3">
             <h3 className="text-neutral font-medium text-sm mb-3">New Anki Deck</h3>
+
             <input
               value={topic}
               onChange={e => setTopic(e.target.value)}
               placeholder="Topic (e.g. Renal physiology, Cardiac arrhythmias)"
-              className="w-full bg-surface-3 rounded-lg px-3 py-2.5 text-sm text-neutral placeholder:text-surface-4 outline-none border border-transparent focus:border-brand-primary/50 transition-colors mb-3"
-              onKeyDown={e => e.key === "Enter" && handleGenerate()}
+              className="w-full bg-surface-3 rounded-lg px-3 py-2.5 text-sm text-neutral placeholder:text-surface-4 outline-none border border-transparent focus:border-brand-primary/50 transition-colors mb-2"
+              onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleGenerate()}
               disabled={generating}
             />
-            {genError && (
-              <p className="text-accent-error text-xs mb-3">{genError}</p>
+
+            <textarea
+              value={context}
+              onChange={e => setContext(e.target.value)}
+              placeholder="Additional context or notes (optional) — paste lecture notes here"
+              rows={3}
+              className="w-full bg-surface-3 rounded-lg px-3 py-2.5 text-sm text-neutral placeholder:text-surface-4 outline-none border border-transparent focus:border-brand-primary/50 transition-colors resize-none mb-3"
+              disabled={generating}
+            />
+
+            {/* File + search toggles */}
+            <div className="flex items-center gap-2 mb-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.txt"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={generating || uploading}
+                title="Attach PDF or TXT"
+                className={[
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50",
+                  attachedFile
+                    ? "bg-brand-primary/10 text-brand-primary border border-brand-primary/30"
+                    : "bg-surface-3 text-surface-4 hover:text-neutral border border-transparent",
+                ].join(" ")}
+              >
+                {uploading ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />}
+                {uploading ? "Uploading..." : "Attach file"}
+              </button>
+
+              <button
+                onClick={() => setUseSearch(s => !s)}
+                disabled={generating}
+                title="Search the web for latest info on this topic"
+                className={[
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors disabled:opacity-50",
+                  useSearch
+                    ? "bg-brand-primary/10 text-brand-primary border border-brand-primary/30"
+                    : "bg-surface-3 text-surface-4 hover:text-neutral border border-transparent",
+                ].join(" ")}
+              >
+                <Search size={12} />
+                Web search
+              </button>
+            </div>
+
+            {/* Attached file badge */}
+            {attachedFile && (
+              <div className="flex items-center gap-2 mb-3">
+                <span className="flex items-center gap-1.5 px-2 py-1 bg-brand-primary/10 border border-brand-primary/20 rounded-md text-[11px] text-brand-primary font-medium max-w-xs truncate">
+                  <FileText size={10} className="flex-shrink-0" />
+                  {attachedFile}
+                </span>
+                <button
+                  onClick={() => setAttachedFile(null)}
+                  className="text-surface-4 hover:text-accent-error transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              </div>
             )}
+
+            {uploadError && <p className="text-accent-error text-xs mb-3">{uploadError}</p>}
+            {genError && <p className="text-accent-error text-xs mb-3">{genError}</p>}
+
             <div className="flex gap-2">
               <button
                 onClick={handleGenerate}
-                disabled={!topic.trim() || generating}
+                disabled={!topic.trim() || generating || uploading}
                 className="flex items-center gap-2 px-4 py-2 bg-brand-primary hover:bg-brand-primary/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-md text-sm text-white font-medium transition-colors"
               >
                 {generating && <Loader2 size={14} className="animate-spin" />}
                 {generating ? "Generating..." : "Generate 15-20 Cards"}
               </button>
               <button
-                onClick={() => { setShowNew(false); setGenError(null) }}
+                onClick={resetForm}
                 className="px-4 py-2 bg-surface-3 hover:bg-surface-2 rounded-md text-sm text-surface-4 transition-colors"
               >
                 Cancel
