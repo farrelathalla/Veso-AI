@@ -1,7 +1,8 @@
 import json
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from app.api.deps import current_user
+from app.core.limiter import limiter
 from app.db.models import ChatRequest
 from app.services.chat_service import (
     get_or_create_conversation,
@@ -20,12 +21,14 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 
 
 @router.get("/conversations")
-async def list_conversations(user=Depends(current_user)):
+@limiter.limit("60/minute")
+async def list_conversations(request: Request, user=Depends(current_user)):
     return get_user_conversations(user["id"])
 
 
 @router.get("/conversations/{conversation_id}/messages")
-async def get_messages(conversation_id: str, user=Depends(current_user)):
+@limiter.limit("60/minute")
+async def get_messages(request: Request, conversation_id: str, user=Depends(current_user)):
     # Verify the conversation belongs to the requesting user before returning messages
     from app.db.supabase import get_db
     db = get_db()
@@ -36,13 +39,15 @@ async def get_messages(conversation_id: str, user=Depends(current_user)):
 
 
 @router.delete("/conversations/{conversation_id}")
-async def remove_conversation(conversation_id: str, user=Depends(current_user)):
+@limiter.limit("30/minute")
+async def remove_conversation(request: Request, conversation_id: str, user=Depends(current_user)):
     delete_conversation(conversation_id, user["id"])
     return {"status": "deleted"}
 
 
 @router.post("/stream")
-async def chat_stream(req: ChatRequest, user=Depends(current_user)):
+@limiter.limit("30/minute")
+async def chat_stream(request: Request, req: ChatRequest, user=Depends(current_user)):
     """SSE streaming chat endpoint."""
     # Validate message length
     if not req.message.strip():

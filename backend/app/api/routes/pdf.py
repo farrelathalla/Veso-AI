@@ -2,9 +2,10 @@ import json
 import os
 import re
 from pathlib import Path
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from app.api.deps import current_user
+from app.core.limiter import limiter
 from app.rag.pdf_processor import load_file_chunks, summarize_file_text, KNOWLEDGE_BASE_PATH
 from app.rag.vector_store import get_vectorstore
 from app.services.llm import stream_response
@@ -59,7 +60,8 @@ async def _write_limited(file: UploadFile, dest: Path) -> None:
 
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...), user=Depends(current_user)):
+@limiter.limit("20/minute")
+async def upload_file(request: Request, file: UploadFile = File(...), user=Depends(current_user)):
     """Upload a .txt or .pdf, ingest into ChromaDB."""
     raw_name = file.filename or "upload.txt"
     _validate_extension(raw_name)
@@ -71,7 +73,8 @@ async def upload_file(file: UploadFile = File(...), user=Depends(current_user)):
 
 
 @router.post("/summarize")
-async def summarize_file(file: UploadFile = File(...), user=Depends(current_user)):
+@limiter.limit("10/minute")
+async def summarize_file(request: Request, file: UploadFile = File(...), user=Depends(current_user)):
     """Upload a .txt or .pdf and stream a medical summary."""
     raw_name = file.filename or "upload.txt"
     _validate_extension(raw_name)

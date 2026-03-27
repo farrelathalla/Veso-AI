@@ -144,13 +144,14 @@ function renderMarkdown(text: string): React.ReactNode[] {
 
     // Table — collect all | lines including separator
     if (line.startsWith("|")) {
+      const tableStartKey = i
       const tableLines: string[] = []
       while (i < lines.length && lines[i].startsWith("|")) {
         tableLines.push(lines[i])
         i++
       }
       if (tableLines.length >= 2) {
-        elements.push(renderTable(tableLines, i))
+        elements.push(renderTable(tableLines, tableStartKey))
       }
       continue
     }

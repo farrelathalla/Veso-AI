@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from app.api.deps import current_user
+from app.core.limiter import limiter
 from app.db.supabase import get_db
 from app.db.models import AnkiGenerateRequest
 from app.agents.anki_agent import generate_anki_cards
@@ -18,7 +19,8 @@ router = APIRouter(prefix="/anki", tags=["anki"])
 
 
 @router.post("/generate")
-async def generate(req: AnkiGenerateRequest, user=Depends(current_user)):
+@limiter.limit("15/minute")
+async def generate(request: Request, req: AnkiGenerateRequest, user=Depends(current_user)):
     """Generate Anki cards for a topic and persist them."""
     # Retrieve context — file-specific, semantic RAG, or web search (or any combination)
     if req.attached_file:
@@ -81,12 +83,14 @@ async def generate(req: AnkiGenerateRequest, user=Depends(current_user)):
 
 
 @router.get("/decks")
-async def list_decks(user=Depends(current_user)):
+@limiter.limit("60/minute")
+async def list_decks(request: Request, user=Depends(current_user)):
     return get_user_decks(user["id"])
 
 
 @router.get("/decks/{deck_id}/cards")
-async def list_cards(deck_id: str, user=Depends(current_user)):
+@limiter.limit("60/minute")
+async def list_cards(request: Request, deck_id: str, user=Depends(current_user)):
     # Verify the deck belongs to the requesting user
     db = get_db()
     row = db.table("anki_decks").select("id").eq("id", deck_id).eq("user_id", user["id"]).maybe_single().execute()
@@ -96,6 +100,7 @@ async def list_cards(deck_id: str, user=Depends(current_user)):
 
 
 @router.delete("/decks/{deck_id}")
-async def remove_deck(deck_id: str, user=Depends(current_user)):
+@limiter.limit("30/minute")
+async def remove_deck(request: Request, deck_id: str, user=Depends(current_user)):
     delete_deck(deck_id, user["id"])
     return {"status": "deleted"}

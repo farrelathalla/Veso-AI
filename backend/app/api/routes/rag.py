@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from app.api.deps import current_user
+from app.core.limiter import limiter
 from app.rag.pdf_processor import ingest_knowledge_base
 from app.rag.vector_store import get_vectorstore
 
@@ -7,7 +8,8 @@ router = APIRouter(prefix="/rag", tags=["rag"])
 
 
 @router.post("/ingest")
-async def ingest(user=Depends(current_user)):
+@limiter.limit("5/minute")
+async def ingest(request: Request, user=Depends(current_user)):
     """Ingest all new .txt/.pdf files from knowledge_base/ into ChromaDB."""
     vs = get_vectorstore()
     collection = vs._collection
@@ -20,7 +22,8 @@ async def ingest(user=Depends(current_user)):
 
 
 @router.get("/status")
-async def status(user=Depends(current_user)):
+@limiter.limit("30/minute")
+async def status(request: Request, user=Depends(current_user)):
     """Return indexing status: chunk count and list of indexed source files."""
     vs = get_vectorstore()
     collection = vs._collection
