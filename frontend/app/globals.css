@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand */
+  --color-brand-primary: #10A37F;
+  --color-brand-tint: #D8EFE9;
+  --color-brand-dark: #1E1F22;
+
+  /* Surfaces */
+  --color-surface-0: #1E1F22;
+  --color-surface-1: #282A2E;
+  --color-surface-2: #3F424A;
+  --color-surface-3: #4B4F5B;
+  --color-surface-4: #858B9D;
+  --color-surface-5: #ABABAB;
+
+  /* Accents */
+  --color-accent-warning: #FEC553;
+  --color-accent-error: #F27474;
+
+  /* Neutral */
+  --color-neutral: #F4F4F4;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Font */
+  --font-sans: "Inter", system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: var(--font-sans);
+  }
+
+  body {
+    background: #1E1F22;
+    color: #F4F4F4;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #4B4F5B;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #858B9D;
+  }
+
+  ::selection {
+    background: #10A37F33;
+  }
+
+  *:focus-visible {
+    outline: 2px solid #10A37F;
+    outline-offset: 2px;
+  }
+}

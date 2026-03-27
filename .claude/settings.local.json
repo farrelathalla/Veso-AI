@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Farrel''''''''s Laptop/Desktop/chatbot/Veso-AI/**)",
+      "Bash(npm install:*)"
+    ]
+  }
+}
