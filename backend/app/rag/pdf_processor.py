@@ -6,6 +6,13 @@ from pathlib import Path
 from langchain_core.documents import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
+try:
+    import fitz as _fitz  # PyMuPDF
+    _PDF_SUPPORT = True
+except ImportError:
+    _fitz = None
+    _PDF_SUPPORT = False
+
 KNOWLEDGE_BASE_PATH = Path(__file__).parent.parent.parent / "knowledge_base"
 CHUNK_SIZE = 600
 CHUNK_OVERLAP = 60
@@ -21,9 +28,10 @@ def _extract_text(path: Path) -> str:
         return path.read_text(encoding="utf-8", errors="replace")
 
     if path.suffix.lower() == ".pdf":
+        if not _PDF_SUPPORT:
+            raise RuntimeError("PDF support unavailable — pymupdf not installed")
         try:
-            import fitz  # PyMuPDF
-            doc = fitz.open(str(path))
+            doc = _fitz.open(str(path))
             text = "\n".join(page.get_text() for page in doc)
             doc.close()
             return text

@@ -227,24 +227,20 @@ data: {"type": "done", "conversation_id": "uuid"}
 
 ## Deployment
 
-### Backend → Render
+**See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full step-by-step guide.**
 
-- Root directory: `backend/`
-- Runtime: Docker
-- The `Dockerfile` pre-downloads the HuggingFace embedding model at build time so the first request doesn't time out
-- Free tier sleeps after 15 min of inactivity; first request after wake takes ~30 s
+| Layer | Platform | Notes |
+|---|---|---|
+| Backend | **Railway** (~$5/mo Hobby) | Docker, auto-deploys on push, 24/7 uptime |
+| Frontend | **Vercel** (free) | Auto-deploys on push |
 
-### Frontend → Vercel
-
-- Root directory: `frontend/`
-- Standard Next.js — no special config needed
-
-### Post-deploy checklist
-
-1. Set `NEXTJS_URL` in Render env vars → Vercel URL
-2. Set `NEXT_PUBLIC_API_URL` in Vercel env vars → Render URL
-3. Add Vercel URL to Google OAuth authorised origins and redirect URIs
-4. Trigger RAG ingest: `POST /api/rag/ingest`
+Quick summary:
+1. Push repo to GitHub
+2. Railway → New Project → GitHub repo → Root directory: `backend` → add env vars → deploy
+3. Vercel → New Project → GitHub repo → Root directory: `frontend` → add env vars → deploy
+4. Update `NEXTJS_URL` in Railway and `NEXTAUTH_URL` in Vercel with the final production URLs
+5. Add production URLs to Google OAuth authorised origins and redirect URIs
+6. Trigger RAG ingest: `POST /api/rag/ingest` (once, with your auth token)
 
 ---
 

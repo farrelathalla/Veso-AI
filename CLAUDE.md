@@ -405,11 +405,14 @@ Tailwind v4 uses CSS custom properties — reference colors as `bg-brand-primary
 
 ## Deployment
 
-### Backend → Render (free tier)
+**Full step-by-step guide: `docs/DEPLOYMENT.md`**
+
+### Backend → Railway (~$5/mo Hobby plan)
 - Root directory: `backend/`
-- Runtime: Docker (uses `backend/Dockerfile`)
-- The Dockerfile pre-downloads the HuggingFace embedding model at build time
-- Free tier sleeps after 15 min of inactivity; first request after sleep takes ~30s
+- Runtime: Docker (uses `backend/Dockerfile` + `backend/railway.toml`)
+- The Dockerfile pre-downloads the HuggingFace embedding model at build time (~5–8 min first build)
+- Railway Hobby plan keeps the app running 24/7 — no sleep
+- `PORT` is injected automatically by Railway; `railway.toml` uses `$PORT` in the start command
 - After deploy: call `POST /api/rag/ingest` once to index the knowledge base on the server
 
 ### Frontend → Vercel (free)
@@ -417,10 +420,11 @@ Tailwind v4 uses CSS custom properties — reference colors as `bg-brand-primary
 - No special build config needed — standard Next.js
 
 ### Post-deploy checklist
-1. Set `NEXTJS_URL` in Render env vars to the Vercel URL
-2. Set `NEXT_PUBLIC_API_URL` in Vercel env vars to the Render URL
-3. Add Vercel URL to Google OAuth authorised origins and redirect URIs
-4. Trigger RAG ingest via `POST /api/rag/ingest`
+1. Set `NEXTJS_URL` in Railway env vars to the Vercel URL
+2. Set `NEXT_PUBLIC_API_URL` in Vercel env vars to the Railway URL
+3. Set `NEXTAUTH_URL` in Vercel env vars to the Vercel URL
+4. Add Vercel URL to Google OAuth authorised origins and redirect URIs
+5. Trigger RAG ingest via `POST /api/rag/ingest`
 
 ---
 

@@ -1,37 +1,36 @@
 import httpx
 from fastapi import HTTPException, status
-from app.core.config import settings
 
 
 async def get_current_user(token: str) -> dict:
-    """Verify session by calling the NextAuth session endpoint."""
+    """Verify Google access token by calling Google's userinfo endpoint."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
-                f"{settings.nextjs_url}/api/auth/session",
-                headers={"Cookie": f"next-auth.session-token={token}"},
+                "https://www.googleapis.com/oauth2/v3/userinfo",
+                headers={"Authorization": f"Bearer {token}"},
             )
     except httpx.RequestError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Could not reach auth service",
+            detail="Could not reach Google auth service",
         )
 
     if resp.status_code != 200:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid session",
+            detail="Invalid or expired token",
         )
 
     data = resp.json()
-    if not data or "user" not in data:
+    if not data or "sub" not in data:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
 
     return {
-        "id": data["user"].get("id", data["user"].get("email", "")),
-        "email": data["user"]["email"],
-        "name": data["user"].get("name", ""),
+        "id": data["sub"],
+        "email": data["email"],
+        "name": data.get("name", ""),
     }

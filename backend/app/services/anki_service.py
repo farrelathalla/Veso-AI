@@ -3,12 +3,12 @@ from app.db.models import AnkiDeck, AnkiCard
 import uuid
 
 
-def save_deck_and_cards(user_id: str, topic: str, cards: list[dict]) -> dict:
+def save_deck_and_cards(user_id: str, topic: str, cards: list[dict], title: str | None = None) -> dict:
     db = get_db()
     deck = AnkiDeck(
         id=str(uuid.uuid4()),
         user_id=user_id,
-        title=f"{topic[:60]}",
+        title=(title or topic)[:80],
         topic=topic,
         card_count=len(cards),
     )
@@ -31,7 +31,7 @@ def save_deck_and_cards(user_id: str, topic: str, cards: list[dict]) -> dict:
     if card_rows:
         db.table("anki_cards").insert(card_rows).execute()
 
-    return {"deck_id": deck.id, "card_count": len(card_rows)}
+    return {"deck_id": deck.id, "title": deck.title, "card_count": len(card_rows)}
 
 
 def get_user_decks(user_id: str) -> list[dict]:

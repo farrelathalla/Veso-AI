@@ -1,0 +1,120 @@
+ How to get every key + how to deploy
+
+  1. NVIDIA API Key — you already have it
+
+  Your key is nvapi-buhN... from the prompt. Add it to backend/.env:
+  NVIDIA_API_KEY=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
+
+  ---
+  2. Google OAuth (Google Cloud Console — free)
+
+  1. Go to console.cloud.google.com
+  2. Create a new project (or use existing) → APIs & Services → Credentials
+  3. Click Create Credentials → OAuth 2.0 Client ID
+  4. Application type: Web application
+  5. Under Authorised JavaScript origins, add:
+    - http://localhost:3000
+    - https://your-app.vercel.app (add after Vercel deploy)
+  6. Under Authorised redirect URIs, add:
+    - http://localhost:3000/api/auth/callback/google
+    - https://your-app.vercel.app/api/auth/callback/google
+  7. Copy Client ID and Client Secret
+
+  GOOGLE_CLIENT_ID=xxxxx.apps.googleusercontent.com
+  GOOGLE_CLIENT_SECRET=GOCSPX-xxxxx
+
+  ---
+  3. NEXTAUTH_SECRET (generate yourself)
+
+  Run in terminal:
+  openssl rand -base64 32
+  Paste the output as NEXTAUTH_SECRET in both backend/.env and frontend/.env.local.
+
+  ---
+  4. Supabase (free — supabase.com)
+
+  1. Go to supabase.com → New Project (free tier)
+  2. Set a DB password, choose a region close to you
+  3. Once created, go to Project Settings → API:
+    - Copy Project URL → SUPABASE_URL
+    - Copy service_role key (the secret one, not anon) → SUPABASE_SERVICE_KEY
+  4. Go to SQL Editor → New Query and paste + run the entire SQL schema from docs/plans/2026-03-27-veso-ai-full-build.md
+   (the ## Supabase Schema section)
+
+  SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
+  SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+  ---
+  5. Fill in the .env files
+
+  backend/.env (copy from .env.example):
+  NVIDIA_API_KEY=nvapi-...
+  SUPABASE_URL=https://xxxx.supabase.co
+  SUPABASE_SERVICE_KEY=eyJ...
+  NEXTJS_URL=http://localhost:3000        ← change to Vercel URL in production
+  NEXTAUTH_SECRET=<generated>
+  ENVIRONMENT=development
+
+  frontend/.env.local (copy from .env.local.example):
+  NEXTAUTH_URL=http://localhost:3000
+  NEXTAUTH_SECRET=<same as above>
+  GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com
+  GOOGLE_CLIENT_SECRET=GOCSPX-xxxx
+  NEXT_PUBLIC_API_URL=http://localhost:8000   ← change to Render URL in production
+
+  ---
+  6. Run locally first
+
+  # Terminal 1 — backend
+  cd backend
+  pip install -r requirements.txt
+  cp .env.example .env   # fill in your values
+  python -m uvicorn app.main:app --reload
+  # → http://localhost:8000/api/health should return {"status":"ok"}
+
+  # Terminal 2 — ingest your knowledge base
+  curl -X POST http://localhost:8000/api/rag/ingest \
+    -H "Authorization: Bearer YOUR_SESSION_TOKEN"
+  # (do this after logging in once via the frontend to get a real token)
+
+  # Terminal 3 — frontend
+  cd frontend
+  cp .env.local.example .env.local   # fill in your values
+  npm install
+  npm run dev
+  # → http://localhost:3000
+
+  ---
+  7. Deploy backend → Render
+
+  1. Push your repo to GitHub first
+  2. Go to render.com → New → Web Service → Connect GitHub repo
+  3. Set Root Directory: backend
+  4. Runtime: Docker (it will use backend/Dockerfile)
+  5. Plan: Free
+  6. Under Environment Variables, add all the keys from backend/.env (change NEXTJS_URL to your Vercel URL and
+  ENVIRONMENT=production)
+  7. Deploy → wait ~5 min (first build downloads the embedding model)
+  8. Note your URL: https://veso-ai-backend.onrender.com
+
+  ▎ Render free tier sleeps after 15 min of inactivity. First request after sleep takes ~30s. Acceptable for dev;
+  upgrade to Render Starter ($7/mo) for production.
+
+  ---
+  8. Deploy frontend → Vercel
+
+  1. Go to vercel.com → Add New Project → Import from GitHub
+  2. Select your repo, set Root Directory: frontend
+  3. Under Environment Variables, add all keys from frontend/.env.local — but change:
+    - NEXTAUTH_URL → https://your-app.vercel.app
+    - NEXT_PUBLIC_API_URL → https://veso-ai-backend.onrender.com
+  4. Deploy
+  5. Note your URL: https://veso-ai.vercel.app
+
+  ---
+  9. Final post-deploy steps
+
+  1. Update NEXTJS_URL in your Render env vars to your Vercel URL
+  2. Update Google OAuth Authorised origins & redirect URIs with your Vercel URL
+  3. Trigger RAG ingest: log in to the app, then call POST /api/rag/ingest once to index all 18 textbooks into ChromaDB
+  (this runs on Render, not locally — so the vectors are stored there)

@@ -7,7 +7,12 @@ import { usePathname, useRouter } from "next/navigation"
 import { getConversations, deleteConversation } from "@/lib/api"
 import type { Conversation } from "@/lib/types"
 
-export function ChatListPanel() {
+interface Props {
+  isOpen?: boolean
+  onClose?: () => void
+}
+
+export function ChatListPanel({ isOpen, onClose }: Props) {
   const { data: session } = useSession()
   const [convs, setConvs] = useState<Conversation[]>([])
   const [search, setSearch] = useState("")
@@ -20,8 +25,6 @@ export function ChatListPanel() {
   }, [session])
 
   useEffect(() => { load() }, [load])
-
-  // Refresh list when pathname changes (new conversation created)
   useEffect(() => { load() }, [pathname, load])
 
   const filtered = convs.filter(c =>
@@ -37,13 +40,24 @@ export function ChatListPanel() {
     if (pathname === `/chat/${convId}`) router.push("/chat")
   }
 
+  const handleNavClick = () => onClose?.()
+
   return (
-    <div className="w-64 flex-shrink-0 bg-surface-1 flex flex-col h-full border-r border-surface-2/50">
+    <div
+      className={[
+        // Always fixed — no position switching
+        "fixed inset-y-0 left-14 w-64 z-30",
+        "flex flex-col bg-surface-1 border-r border-surface-2/50",
+        "transition-transform duration-200 ease-in-out",
+        // Desktop: always show. Mobile: show only when isOpen
+        isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0",
+      ].join(" ")}
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-[52px] flex-shrink-0 border-b border-surface-2/50">
         <span className="text-neutral font-semibold text-base">My Chats</span>
         <button
-          onClick={() => router.push("/chat")}
+          onClick={() => { router.push("/chat"); handleNavClick() }}
           title="New chat"
           className="w-7 h-7 flex items-center justify-center bg-surface-2 hover:bg-surface-3 rounded-md transition-colors"
         >
@@ -77,6 +91,7 @@ export function ChatListPanel() {
             <Link
               key={conv.id}
               href={`/chat/${conv.id}`}
+              onClick={handleNavClick}
               onMouseEnter={() => setHoveredId(conv.id)}
               onMouseLeave={() => setHoveredId(null)}
               className={[

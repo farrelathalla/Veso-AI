@@ -1,5 +1,5 @@
 "use client"
-import { MessageSquare, BookOpen } from "lucide-react"
+import { MessageSquare, BookOpen, Menu } from "lucide-react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import { useSession, signOut } from "next-auth/react"
@@ -9,17 +9,30 @@ const navItems = [
   { href: "/anki", icon: BookOpen, label: "Anki Cards" },
 ]
 
-export function IconRail() {
+interface Props {
+  onMenuClick?: () => void
+}
+
+export function IconRail({ onMenuClick }: Props) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const initial = session?.user?.name?.[0]?.toUpperCase() ?? "U"
 
   return (
-    <aside className="w-14 flex-shrink-0 bg-surface-0 flex flex-col items-center py-3 gap-1.5">
+    <aside className="relative z-40 w-14 flex-shrink-0 bg-surface-0 flex flex-col items-center py-3 gap-1.5">
       {/* Logo */}
-      <div className="w-9 h-9 rounded-xl bg-brand-primary flex items-center justify-center mb-4 flex-shrink-0">
+      <div className="w-9 h-9 rounded-xl bg-brand-primary flex items-center justify-center mb-2 flex-shrink-0">
         <span className="text-white font-bold text-base select-none">V</span>
       </div>
+
+      {/* Mobile hamburger — opens chat list panel */}
+      <button
+        onClick={onMenuClick}
+        title="Toggle sidebar"
+        className="w-10 h-10 flex items-center justify-center rounded-md text-surface-4 hover:text-neutral hover:bg-white/5 transition-colors mb-2 md:hidden"
+      >
+        <Menu size={20} strokeWidth={1.5} />
+      </button>
 
       {/* Nav items */}
       {navItems.map(({ href, icon: Icon, label }) => {
@@ -47,7 +60,7 @@ export function IconRail() {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* User avatar */}
+      {/* User avatar / sign out */}
       <button
         onClick={() => signOut({ callbackUrl: "/login" })}
         title="Sign out"
