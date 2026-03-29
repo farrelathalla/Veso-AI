@@ -1,21 +1,50 @@
 # Veso AI
 
-A medical-student AI chatbot for board exam preparation. Ask medical questions, upload study materials, search the web for latest guidelines, and generate Anki flashcards — all in one place.
+**An AI-powered medical study assistant built for USMLE and PLAB students.**
 
-Built for USMLE / PLAB students.
+Veso AI combines a reasoning large language model, retrieval-augmented generation, real-time web search, and intelligent Anki flashcard generation into a single, fast, streaming chat interface — purpose-built for the way medical students actually study.
 
 ---
 
-## Features
+## Screenshots
 
-- **Conversational AI** — ask anything medical; the LLM has rolling context over the last 12 messages in each conversation, so follow-up prompts ("explain more detail") always resolve correctly
-- **File upload** — attach a PDF or TXT to any chat message or Anki generation; the system retrieves content specifically from that file rather than running a generic semantic search
-- **Web search** — toggle DuckDuckGo search to ground answers and cards in the latest guidelines and evidence
-- **RAG** — uploaded files and knowledge-base documents are chunked, embedded, and stored in ChromaDB; retrieved as context on every relevant request
-- **Anki flashcard generation** — 15–25 cards per deck, three types (concept / conceptual / clinical), three difficulty levels; generated from topic + any combination of uploaded file, knowledge base, web search, and manual notes
-- **Anki from chat** — generate a deck inline inside any conversation; the deck card appears immediately and persists across reloads
-- **Filename badge** — when a file is attached to a message, the filename is shown in the chat bubble and preserved in history
-- **Markdown rendering** — AI responses render bold, headings, lists, tables, and code blocks without any third-party markdown library
+### Conversational Medical AI
+Ask complex questions and get structured, exam-focused answers with markdown rendering — bold, tables, headings, and code blocks all rendered natively.
+
+![Veso AI Chat — RNA Explanation](image.png)
+
+### Live Web Search with Real Citations
+Toggle web search to ground any answer in the latest guidelines, studies, and PubMed papers — with clickable source links returned alongside every response.
+
+![Veso AI — Web Search with Cited Sources](image2.png)
+
+### Anki Flashcard Generation from PDFs
+Attach any PDF or study note, and Veso AI generates 15–25 high-yield Anki cards across three types (concept, conceptual, clinical) and three difficulty levels — with the deck title derived intelligently from the file content, not your prompt.
+
+![Veso AI — Anki Card Viewer](image3.png)
+
+### PubMed & Academic Journal Search
+Searches targeting journals or studies automatically query PubMed, PMC, and ResearchGate directly — returning real paper titles and live URLs, not invented DOIs.
+
+![Veso AI — Journal Search Results](image4.png)
+
+---
+
+## What Makes Veso AI Different
+
+**Powered by Kimi-K2-Instruct** — a frontier reasoning model via NVIDIA NIM, accessed through LangChain's NVIDIA AI Endpoints. Kimi-K2-Instruct is a 1-trillion-parameter mixture-of-experts model that produces detailed, structured medical explanations at a level that matches or exceeds general-purpose models on knowledge-heavy tasks.
+
+**File-aware RAG, not generic semantic search** — when you attach a PDF, Veso AI retrieves content specifically from that file using source-filtered ChromaDB lookups, bypassing semantic search entirely. Queries like "explain this PDF" match exactly zero medical content chunks semantically — file-anchored retrieval solves this.
+
+**Real web search with academic source targeting** — powered by Tavily's AI-optimised search API. Journal queries automatically route to PubMed, PMC, and ResearchGate with domain filtering, returning real paper URLs rather than fabricated DOIs.
+
+**Streaming everything** — chat responses, document summaries, and search answers all stream token-by-token over Server-Sent Events with a custom SSE parser built on the native `ReadableStream` API (no `EventSource` — it can't send `Authorization` headers).
+
+**Anki cards that are actually good** — 15–25 cards per deck, evenly mixed across concept / conceptual / clinical types and easy / medium / hard difficulty levels. Clinical statements use cautious phrasing by convention. The LLM output goes through a sanitisation pipeline that strips cloze syntax, section markers, and other artefacts before any card is saved.
+
+**Anki from inside chat** — generate a deck mid-conversation without leaving the chat. The deck card appears inline and persists across reloads via a structured metadata pattern on the message record.
+
+**Secure by design** — path traversal prevention on file uploads, 20 MB upload cap, per-user data scoping on every query, conversation ownership checks before any data access, anchored CORS regex, prompt injection detection, and user input delimiters in every LLM call.
 
 ---
 
@@ -23,49 +52,50 @@ Built for USMLE / PLAB students.
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 16.2.1 (App Router), TypeScript, Tailwind CSS v4, Framer Motion, NextAuth v5 beta |
-| Backend | FastAPI 0.111, Python 3.11 |
-| LLM | `moonshotai/kimi-k2-instruct` via NVIDIA NIM (`langchain_nvidia_ai_endpoints`) |
-| Vector DB | ChromaDB (persistent, local) |
-| Embeddings | `sentence-transformers/all-MiniLM-L6-v2` — CPU, no API key |
-| Search | DuckDuckGo (`duckduckgo-search`) — no API key |
-| Database | Supabase (Postgres) |
-| Auth | Google OAuth via NextAuth v5 |
-
-Everything is on free tiers.
-
----
-
-## Project Structure
-
-```
-Veso-AI/
-├── frontend/          Next.js 16 app  → Vercel
-├── backend/           FastAPI app     → Render (Docker)
-├── docs/
-│   ├── UI_DESIGN_SPEC.md
-│   └── plans/
-└── CLAUDE.md          Full architecture reference (read before touching code)
-```
+| Frontend | Next.js 16.2.1 (App Router), TypeScript, Tailwind CSS v4 |
+| Animation | Framer Motion v12 |
+| Auth | NextAuth.js v5 beta — Google OAuth, sliding 30-day session with auto-refresh |
+| Backend | FastAPI 0.111, Python 3.11, streaming SSE |
+| LLM | `moonshotai/kimi-k2-instruct` via NVIDIA NIM — LangChain NVIDIA AI Endpoints |
+| RAG | ChromaDB + `sentence-transformers/all-MiniLM-L6-v2` (CPU, no API key) |
+| Web Search | Tavily Search API (AI-optimised) + DuckDuckGo fallback |
+| Database | Supabase (Postgres) — conversations, messages, Anki decks and cards |
+| Deployment | Vercel (frontend) + Railway (backend, Docker) |
 
 ---
 
-## Quick Start
+## Features
+
+- **Streaming chat** — token-by-token SSE with rolling 12-message context window; follow-up questions always resolve correctly
+- **Web search** — Tavily-powered with automatic academic source routing for journal/study queries; cited sources rendered as a clickable panel
+- **RAG** — knowledge-base files chunked at 600 tokens, embedded, stored in ChromaDB; semantic retrieval for general questions, source-filtered retrieval when a file is attached
+- **File upload** — attach PDF or TXT to any message; content is ingested into ChromaDB and retrieved directly from that file for the current request
+- **Anki generation** — from topic, uploaded file, knowledge base, web search, or any combination; 15–25 cards, three types, three difficulty levels
+- **Inline Anki from chat** — generate a deck mid-conversation; deck card persists in chat history across reloads
+- **Auto-generated titles** — conversations and decks are titled automatically via a short LLM call; file-attached Anki decks derive their title from the document content, not the user's meta-instruction
+- **Markdown rendering** — bold, headings, numbered/bulleted lists, tables, code blocks — implemented without `react-markdown`
+- **Responsive layout** — three-column shell (icon rail, chat list, main) collapses to a slide-over sidebar on mobile
+- **Prompt injection defence** — regex detection of jailbreak patterns short-circuits the LLM call before any tokens are generated
+
+---
+
+## Running Locally
 
 ### Prerequisites
 
 - Node.js 18+
-- Python 3.11 (specifically — see backend note below)
-- A Supabase project
+- Python 3.11 (specifically — pinned dependencies require 3.11 wheels)
+- A [Supabase](https://supabase.com) project
 - A Google OAuth app (Client ID + Secret)
-- An NVIDIA NIM API key
+- An [NVIDIA NIM](https://build.nvidia.com) API key
+- A [Tavily](https://app.tavily.com) API key (free, 1000 searches/month)
 
 ### Backend
 
 ```bash
 cd backend
 
-# Python 3.11 venv is required — not global Python
+# Python 3.11 venv is required
 "C:\Users\...\Python311\python.exe" -m venv .venv
 .venv\Scripts\activate          # Windows
 # source .venv/bin/activate     # Mac/Linux
@@ -73,10 +103,7 @@ cd backend
 pip install -r requirements.txt
 
 cp .env.example .env
-# fill in .env (see below)
-
-python -m uvicorn app.main:app --reload
-# → http://localhost:8000
+# fill in .env
 ```
 
 **`backend/.env`**
@@ -87,18 +114,19 @@ SUPABASE_SERVICE_KEY=eyJ...
 NEXTJS_URL=http://localhost:3000
 NEXTAUTH_SECRET=<openssl rand -base64 32>
 ENVIRONMENT=development
+TAVILY_API_KEY=tvly-...
 ```
 
-> **Why Python 3.11?** `langchain==0.2.5`, `pydantic==2.7.1`, `chromadb==0.5.0`, and `pymupdf==1.24.5` all have pre-built wheels for 3.11. On 3.13 they try to compile from source and fail.
+```bash
+python -m uvicorn app.main:app --reload
+# → http://localhost:8000
+```
 
 ### Frontend
 
 ```bash
 cd frontend
-
 cp .env.local.example .env.local
-# fill in .env.local (see below)
-
 npm install
 npm run dev
 # → http://localhost:3000
@@ -113,9 +141,7 @@ GOOGLE_CLIENT_SECRET=...
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-### Database (Supabase)
-
-Run these in the Supabase SQL editor:
+### Database (Supabase SQL Editor)
 
 ```sql
 create table conversations (
@@ -155,21 +181,31 @@ create table anki_cards (
   position int not null default 0
 );
 
--- Enable RLS (backend uses service_role key which bypasses it)
 alter table conversations enable row level security;
 alter table messages enable row level security;
 alter table anki_decks enable row level security;
 alter table anki_cards enable row level security;
 ```
 
-### Seed the Knowledge Base (optional)
+### Optional: Seed the Knowledge Base
 
-Drop `.txt` or `.pdf` medical textbooks into `backend/knowledge_base/`, then:
+Drop `.txt` or `.pdf` medical textbooks into `backend/knowledge_base/`, then call:
 
 ```bash
 curl -X POST http://localhost:8000/api/rag/ingest \
   -H "Authorization: Bearer <your-google-access-token>"
 ```
+
+---
+
+## Deployment
+
+Full guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+
+| Layer | Platform |
+|---|---|
+| Backend | Railway (~$5/mo Hobby) — Docker, 24/7 uptime, auto-deploy on push |
+| Frontend | Vercel (free) — auto-deploy on push |
 
 ---
 
@@ -179,12 +215,12 @@ curl -X POST http://localhost:8000/api/rag/ingest \
 |---|---|---|---|
 | GET | `/api/health` | No | Health check |
 | GET | `/api/me` | Yes | Current user info |
-| GET | `/api/chat/conversations` | Yes | List user's conversations |
+| GET | `/api/chat/conversations` | Yes | List conversations |
 | GET | `/api/chat/conversations/{id}/messages` | Yes | Get messages (ownership verified) |
 | DELETE | `/api/chat/conversations/{id}` | Yes | Delete conversation |
 | POST | `/api/chat/stream` | Yes | SSE streaming chat |
 | POST | `/api/anki/generate` | Yes | Generate Anki deck |
-| GET | `/api/anki/decks` | Yes | List user's decks |
+| GET | `/api/anki/decks` | Yes | List decks |
 | GET | `/api/anki/decks/{id}/cards` | Yes | Get cards (ownership verified) |
 | DELETE | `/api/anki/decks/{id}` | Yes | Delete deck |
 | POST | `/api/pdf/upload` | Yes | Upload file → ingest to ChromaDB |
@@ -192,116 +228,11 @@ curl -X POST http://localhost:8000/api/rag/ingest \
 | POST | `/api/rag/ingest` | Yes | Ingest knowledge_base/ files |
 | GET | `/api/rag/status` | Yes | ChromaDB chunk count + file list |
 
-### Chat stream request body
-```json
-{
-  "message": "string",
-  "conversation_id": "uuid | null",
-  "use_rag": true,
-  "use_search": false,
-  "attached_file": "filename.pdf | null"
-}
-```
-
-### Anki generate request body
-```json
-{
-  "topic": "string",
-  "additional_context": "string | null",
-  "max_cards": 20,
-  "conversation_id": "uuid | null",
-  "attached_file": "filename.pdf | null",
-  "use_search": false
-}
-```
-
-### SSE event format
+SSE event format (`/api/chat/stream` and `/api/pdf/summarize`):
 ```
 data: {"type": "meta", "conversation_id": "uuid"}
 data: {"type": "token", "content": "..."}
+data: {"type": "sources", "sources": [...]}
 data: {"type": "error", "message": "..."}
 data: {"type": "done", "conversation_id": "uuid"}
 ```
-
----
-
-## Deployment
-
-**See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the full step-by-step guide.**
-
-| Layer | Platform | Notes |
-|---|---|---|
-| Backend | **Railway** (~$5/mo Hobby) | Docker, auto-deploys on push, 24/7 uptime |
-| Frontend | **Vercel** (free) | Auto-deploys on push |
-
-Quick summary:
-1. Push repo to GitHub
-2. Railway → New Project → GitHub repo → Root directory: `backend` → add env vars → deploy
-3. Vercel → New Project → GitHub repo → Root directory: `frontend` → add env vars → deploy
-4. Update `NEXTJS_URL` in Railway and `NEXTAUTH_URL` in Vercel with the final production URLs
-5. Add production URLs to Google OAuth authorised origins and redirect URIs
-6. Trigger RAG ingest: `POST /api/rag/ingest` (once, with your auth token)
-
----
-
-## Known Issues & Fixes Applied
-
-### Anki messages disappearing on reload
-
-**Problem:** When Anki was generated from chat mode, neither the user's prompt nor the deck card were saved to the database — they only existed in React state. On reload both vanished.
-
-**Fix:** `POST /api/anki/generate` now accepts a `conversation_id`. When provided, it saves a `user` message (topic + `metadata.attachedFile`) and an `assistant` message (`content: ""`, `metadata.ankiDeck: { id, title, card_count }`) to the conversation. The frontend loader reconstructs `ankiDeck` and `attachedFile` from metadata when fetching messages. Additionally, `handleAnkiCreated` now immediately adds both bubbles to local React state so they appear without waiting for a reload.
-
-### PDF context not picked up
-
-**Problem:** Queries like "explain this pdf" or "make anki cards based on this pdf" were used as ChromaDB semantic search queries — they don't match medical content. The LLM received no relevant context even though the file was ingested.
-
-**Fix:** Added `retrieve_from_source(filename, k)` which fetches chunks by `metadata.source == filename` using ChromaDB's `where` filter, bypassing semantic search entirely. When `attached_file` is present in a request, this function is used instead of `retrieve_context`.
-
-### Anki title was the user's instruction
-
-**Problem:** When using Anki mode with "make anki cards based on this pdf", the deck title became exactly that string. `generate_title` was called with the meta-instruction rather than the file content.
-
-**Fix:** When `attached_file` is set and chunks were retrieved, title is generated from the first 300 characters of the file content: `generate_title(rag_chunks[0][:300])`.
-
-### User prompt bubble missing filename badge after reload
-
-**Problem:** The user message saved by the Anki route had empty metadata — `attached_file` was in the request but never written to `metadata.attachedFile` on the saved message.
-
-**Fix:** Anki route now passes `metadata={"attachedFile": req.attached_file}` to `save_message` when `attached_file` is present, matching the pattern used by the chat route.
-
-### Cloze syntax and § markers in chat responses
-
-**Problem:** Kimi-K2-Instruct occasionally generates Anki cloze syntax (`{{c1::topoisomerase}}`, `{{c?}}`) and section markers (`§1`, `§2`) in regular chat responses, having seen this format in training data.
-
-**Fix (two layers):**
-1. `MEDICAL_SYSTEM_PROMPT` explicitly forbids these patterns at the source
-2. `cleanChatText()` in `MessageBubble.tsx` strips them client-side as a safety net for existing messages and LLM prompt misses: `{{cN::answer}}` → `answer`, `{{c?}}` → removed, `§N` → removed, "Need cards? Ask..." lines → line removed
-
-### Anki card text contained cloze syntax
-
-**Problem:** LLM sometimes generated Anki cloze format in the `front`/`back` fields of generated cards, making them display raw syntax like `{{c1::valin}}`.
-
-**Fix:** `_clean_text()` in `anki_agent.py` is called on every `front` and `back` field before the card is saved, applying the same pattern stripping.
-
----
-
-## Architecture Decisions
-
-**Why source-filtered retrieval instead of hybrid search?**
-A meta-instruction query ("explain this pdf") has near-zero cosine similarity to the medical content it refers to. Semantic search fails silently — it returns results but from unrelated documents. Source filtering is deterministic: if the file was ingested, its chunks are returned.
-
-**Why `messages.metadata` for ankiDeck and attachedFile?**
-The `content` field should only hold what the user/assistant actually said. Structured UI data (deck references, file names) is orthogonal to conversational content and belongs in metadata. This keeps the LLM history clean — `stream_response()` only reads `role` and `content`, so metadata never leaks into the model context.
-
-**Why capture topic/attachedFile before clearing state in ChatInput?**
-JavaScript closures over React state capture the value at render time. After `await generateAnki(...)` resolves, `setText("")` has run. If the callback uses `text` or `attachedFile` from state instead of local captures, it gets empty strings. Always capture as local variables before any state mutation inside an async function.
-
-**Why 12-message context window?**
-Balances conversation coherence against token cost. 12 messages ≈ 6 exchanges, enough for a focused study session on one topic. Older messages are dropped; if a user needs older context they should start a new conversation.
-
----
-
-## Contributing
-
-Read `CLAUDE.md` completely before making any changes — it is the single source of truth for architecture decisions, security constraints, and conventions that must not be regressed.

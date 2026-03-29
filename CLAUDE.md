@@ -50,7 +50,7 @@ The two apps are **deployed separately** — frontend on Vercel, backend on Rend
 | LLM | `langchain_nvidia_ai_endpoints` → `moonshotai/kimi-k2-instruct` |
 | Vector DB | ChromaDB (persistent, local at `backend/chroma_db/`) |
 | Embeddings | `sentence-transformers/all-MiniLM-L6-v2` — runs on CPU, completely free |
-| Search | DuckDuckGo (`duckduckgo-search`) — no API key needed |
+| Search | Tavily Search API (primary, free 1000/month) + DuckDuckGo fallback |
 | Database | Supabase (free tier) — Postgres for users, chats, Anki cards |
 | File parsing | PyMuPDF (PDF), plain `read_text` (TXT) |
 
@@ -106,6 +106,7 @@ SUPABASE_SERVICE_KEY=eyJ...        # service_role key (not anon key)
 NEXTJS_URL=http://localhost:3000   # change to Vercel URL in production
 NEXTAUTH_SECRET=...                # generate: openssl rand -base64 32
 ENVIRONMENT=development            # set to "production" on Render
+TAVILY_API_KEY=tvly-...            # get free key at https://app.tavily.com
 ```
 
 ### `frontend/.env.local`
@@ -286,6 +287,7 @@ Both chat conversations and Anki decks receive auto-generated titles (3–7 word
 - **Markdown rendering** — `MessageBubble` renders AI responses as markdown (bold, headers, lists, fenced code blocks, inline code) using inline `renderMarkdown` / `inlineMarkdown` helper functions. There is no `react-markdown` dependency. Before rendering, `cleanChatText()` strips Anki cloze syntax and `§` markers from the raw content.
 - **Responsive sidebar** — on mobile, `ChatListPanel` slides in as an overlay when the hamburger (Menu icon) in `IconRail` is tapped. A new client component `frontend/components/DashboardShell.tsx` owns the `sidebarOpen` state and replaces the direct composition that was in `(dashboard)/layout.tsx`.
 - **SSE navigation timing** — `router.replace("/chat/<id>")` is now called on the `done` event, not on the `meta` event. This prevents the chat component from unmounting while the stream is still active.
+- **Tab-focus stability** — messages in an existing conversation are only fetched once per conversation ID; NextAuth session re-validation on tab focus no longer triggers a full reload.
 
 ---
 
@@ -311,6 +313,7 @@ text = text.replace(/§\s*\d*/g, "")
 // "Need cards? Ask..." lines → line removed
 // "make Anki cards from..." lines → line removed
 // "batch-generate" lines → line removed
+// lines of 3+ em-dashes/en-dashes only (e.g. –––––––––) → line removed
 ```
 
 ---
@@ -437,7 +440,8 @@ Tailwind v4 uses CSS custom properties — reference colors as `bg-brand-primary
 | Supabase | Free tier (500 MB DB) |
 | ChromaDB | Local on Render disk |
 | HuggingFace embeddings | `all-MiniLM-L6-v2` runs on CPU, no API |
-| DuckDuckGo search | No API key required |
+| Tavily Search API | Free tier: 1,000 searches/month |
+| DuckDuckGo (fallback) | No API key — used only when TAVILY_API_KEY is not set |
 | NVIDIA Kimi-K2-Instruct | Existing NVIDIA NIM key |
 | Google OAuth | Free |
 

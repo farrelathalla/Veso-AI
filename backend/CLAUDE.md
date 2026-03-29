@@ -45,7 +45,7 @@ backend/
 │   │       ├── pdf.py           POST upload, POST summarize (SSE)
 │   │       └── rag.py           POST ingest, GET status
 │   ├── agents/
-│   │   ├── search_agent.py      DuckDuckGo search → stream synthesised answer + _run_search()
+│   │   ├── search_agent.py      DuckDuckGo/Tavily search → stream synthesised answer; Tavily primary when key set
 │   │   └── anki_agent.py        Kimi-K2-Instruct → JSON cards → _clean_text → sanitise/dedup
 │   ├── rag/
 │   │   ├── embeddings.py        Singleton HuggingFace all-MiniLM-L6-v2
@@ -212,5 +212,6 @@ Never query by ID alone without also checking `user_id`.
 - **`save_message` is called BEFORE streaming starts** — intentional; prevents lost messages if user navigates away mid-stream
 - **`max_tokens` not `max_completion_tokens`** — NVIDIA ChatNVIDIA silently ignores `max_completion_tokens`
 - **`get_conversation_history` returns `metadata`** — this is safe; `stream_response` only reads `role` and `content` from each message dict, extra keys are ignored
-- **`_run_search` is synchronous** — it is imported from `search_agent.py` and called directly in the Anki route (not inside an async generator). This is fine for a non-streaming endpoint; the call blocks the request briefly while DuckDuckGo responds.
+- **`_run_search` is synchronous** — it is imported from `search_agent.py` and called directly in the Anki route (not inside an async generator). This is fine for a non-streaming endpoint; the call blocks the request briefly while DuckDuckGo/Tavily responds.
+- **DuckDuckGo is a scraper** — it gets blocked/rate-limited on cloud servers and even locally. Always prefer Tavily (set TAVILY_API_KEY). DDG is kept only as a zero-config fallback.
 - **Anki title from file** — when `attached_file` is set and chunks are retrieved, title comes from `chunks[0][:300]`, not `topic`. If chunks is empty (file not in ChromaDB), falls back to `topic`. Always check `if req.attached_file and rag_chunks` before using `rag_chunks[0]`.

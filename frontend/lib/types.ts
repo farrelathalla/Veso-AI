@@ -12,6 +12,8 @@ export interface Message {
   created_at?: string
   ankiDeck?: { id: string; title: string; card_count: number }
   attachedFile?: string
+  sources?: { title: string; url: string }[]
+  isLoading?: boolean
 }
 
 export interface AnkiCard {

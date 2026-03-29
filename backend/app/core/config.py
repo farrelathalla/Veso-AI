@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     nextjs_url: str = "http://localhost:3000"
     nextauth_secret: str
     environment: str = "development"
+    tavily_api_key: str = ""
 
     class Config:
         env_file = ".env"

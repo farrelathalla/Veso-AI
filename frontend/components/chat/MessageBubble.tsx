@@ -2,62 +2,12 @@
 import { useState } from "react"
 import { Copy, Check, BookOpen, FileText } from "lucide-react"
 import Link from "next/link"
+import { Streamdown } from "streamdown"
 import type { Message } from "@/lib/types"
 
 interface Props {
   message: Message
   isStreaming?: boolean
-}
-
-function inlineMarkdown(text: string): React.ReactNode[] {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*|_{3,})/)
-  return parts.map((part, i) => {
-    if (part.startsWith("**") && part.endsWith("**") && part.length > 4)
-      return <strong key={i} className="font-semibold text-neutral">{part.slice(2, -2)}</strong>
-    if (part.startsWith("`") && part.endsWith("`") && part.length > 2)
-      return <code key={i} className="bg-surface-0 px-1 py-0.5 rounded text-xs font-mono text-brand-primary">{part.slice(1, -1)}</code>
-    if (part.startsWith("*") && part.endsWith("*") && part.length > 2)
-      return <em key={i}>{part.slice(1, -1)}</em>
-    if (/^_{3,}$/.test(part))
-      return <span key={i} className="inline-block min-w-[80px] border-b border-brand-primary/60 mx-0.5 align-bottom" />
-    return part
-  })
-}
-
-function parseTableRow(line: string): string[] {
-  return line.split("|").slice(1, -1).map(cell => cell.trim())
-}
-
-function renderTable(lines: string[], startKey: number): React.ReactNode {
-  const headers = parseTableRow(lines[0])
-  // lines[1] is the separator row (---|---|...), skip it
-  const rows = lines.slice(2).map(l => parseTableRow(l))
-  return (
-    <div key={startKey} className="my-2 overflow-x-auto rounded-lg border border-surface-3">
-      <table className="w-full text-sm border-collapse">
-        <thead>
-          <tr className="bg-surface-2">
-            {headers.map((h, ci) => (
-              <th key={ci} className="px-3 py-2 text-left text-xs font-semibold text-neutral border-b border-surface-3">
-                {inlineMarkdown(h)}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, ri) => (
-            <tr key={ri} className={ri % 2 === 0 ? "bg-surface-1" : "bg-surface-2/40"}>
-              {row.map((cell, ci) => (
-                <td key={ci} className="px-3 py-2 text-neutral border-b border-surface-3/50 last:border-b-0 leading-relaxed">
-                  {inlineMarkdown(cell)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
 }
 
 function cleanChatText(text: string): string {
@@ -72,104 +22,57 @@ function cleanChatText(text: string): string {
     .split("\n")
     .filter(line => !/need cards\? ask/i.test(line) && !/make anki cards from/i.test(line) && !/batch.?generate/i.test(line))
     .join("\n")
+  // Strip em-dash / en-dash horizontal rule lines produced by the LLM (e.g. "–––––––––")
+  text = text.replace(/^[\u2013\u2014\-]{3,}\s*$/gm, "")
   // Collapse runs of spaces introduced by removals
   text = text.replace(/[ \t]{2,}/g, " ")
   return text
 }
 
-function renderMarkdown(text: string): React.ReactNode[] {
-  const lines = text.split("\n")
-  const elements: React.ReactNode[] = []
-  let i = 0
-
-  while (i < lines.length) {
-    const line = lines[i]
-
-    // Fenced code block
-    if (line.startsWith("```")) {
-      const codeLines: string[] = []
-      i++
-      while (i < lines.length && !lines[i].startsWith("```")) {
-        codeLines.push(lines[i])
-        i++
-      }
-      elements.push(
-        <pre key={`code-${i}`} className="bg-surface-0 rounded-lg px-4 py-3 my-2 overflow-x-auto text-xs font-mono text-neutral leading-relaxed">
-          <code>{codeLines.join("\n")}</code>
-        </pre>
-      )
-      i++
-      continue
+const CHAT_MD_COMPONENTS = {
+  p: ({ children }: any) => <p className="leading-[1.7]">{children}</p>,
+  h1: ({ children }: any) => <p className="font-semibold text-neutral mt-3 mb-0.5">{children}</p>,
+  h2: ({ children }: any) => <p className="font-semibold text-neutral mt-3 mb-0.5">{children}</p>,
+  h3: ({ children }: any) => <p className="font-semibold text-neutral mt-3 mb-0.5 text-sm">{children}</p>,
+  strong: ({ children }: any) => <strong className="font-semibold text-neutral">{children}</strong>,
+  em: ({ children }: any) => <em>{children}</em>,
+  code: ({ children, className }: any) => {
+    if (className?.startsWith("language-")) {
+      return <code className="text-xs font-mono text-neutral leading-relaxed">{children}</code>
     }
-
-    // Headings
-    if (line.startsWith("### ")) {
-      elements.push(<p key={i} className="font-semibold text-neutral mt-3 mb-0.5 text-sm">{inlineMarkdown(line.slice(4))}</p>)
-      i++; continue
-    }
-    if (line.startsWith("## ")) {
-      elements.push(<p key={i} className="font-semibold text-neutral mt-3 mb-0.5">{inlineMarkdown(line.slice(3))}</p>)
-      i++; continue
-    }
-    if (line.startsWith("# ")) {
-      elements.push(<p key={i} className="font-semibold text-neutral mt-3 mb-0.5">{inlineMarkdown(line.slice(2))}</p>)
-      i++; continue
-    }
-
-    // Bullet list (-, *, •, or indented with spaces)
-    if (/^(\s{0,3}[-*•]|\s{2,3}\S)/.test(line) && line.match(/^[\s]*[-*•]\s/)) {
-      const content = line.replace(/^[\s]*[-*•]\s/, "")
-      const indent = line.match(/^(\s*)/)?.[1].length ?? 0
-      elements.push(
-        <div key={i} className="flex gap-2" style={{ paddingLeft: `${indent * 4 + 8}px` }}>
-          <span className="text-surface-4 flex-shrink-0 mt-0.5">•</span>
-          <span className="leading-[1.7]">{inlineMarkdown(content)}</span>
-        </div>
-      )
-      i++; continue
-    }
-
-    // Numbered list
-    if (/^\d+\.\s/.test(line)) {
-      const num = line.match(/^(\d+)\./)?.[1]
-      const content = line.replace(/^\d+\.\s/, "")
-      elements.push(
-        <div key={i} className="flex gap-2 pl-2">
-          <span className="text-surface-4 flex-shrink-0 tabular-nums">{num}.</span>
-          <span className="leading-[1.7]">{inlineMarkdown(content)}</span>
-        </div>
-      )
-      i++; continue
-    }
-
-    // Table — collect all | lines including separator
-    if (line.startsWith("|")) {
-      const tableStartKey = i
-      const tableLines: string[] = []
-      while (i < lines.length && lines[i].startsWith("|")) {
-        tableLines.push(lines[i])
-        i++
-      }
-      if (tableLines.length >= 2) {
-        elements.push(renderTable(tableLines, tableStartKey))
-      }
-      continue
-    }
-
-    // Empty line → small gap
-    if (line.trim() === "") {
-      elements.push(<div key={i} className="h-1.5" />)
-      i++; continue
-    }
-
-    // Regular text
-    elements.push(
-      <p key={i} className="leading-[1.7]">{inlineMarkdown(line)}</p>
-    )
-    i++
-  }
-
-  return elements
+    return <code className="bg-surface-0 px-1 py-0.5 rounded text-xs font-mono text-brand-primary">{children}</code>
+  },
+  pre: ({ children }: any) => (
+    <pre className="bg-surface-0 rounded-lg px-4 py-3 my-2 overflow-x-auto text-xs font-mono leading-relaxed">{children}</pre>
+  ),
+  ul: ({ children }: any) => <div className="flex flex-col gap-0.5 pl-2">{children}</div>,
+  ol: ({ children }: any) => <div className="flex flex-col gap-0.5 pl-2">{children}</div>,
+  li: ({ children }: any) => (
+    <div className="flex gap-2">
+      <span className="text-surface-4 flex-shrink-0 mt-0.5">•</span>
+      <span className="leading-[1.7]">{children}</span>
+    </div>
+  ),
+  a: ({ href, children }: any) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-brand-primary hover:underline">
+      {children}
+    </a>
+  ),
+  table: ({ children }: any) => (
+    <div className="my-2 overflow-x-auto rounded-lg border border-surface-3">
+      <table className="w-full text-sm border-collapse">{children}</table>
+    </div>
+  ),
+  th: ({ children }: any) => (
+    <th className="px-3 py-2 text-left text-xs font-semibold text-neutral border-b border-surface-3 bg-surface-2">{children}</th>
+  ),
+  td: ({ children }: any) => (
+    <td className="px-3 py-2 text-neutral border-b border-surface-3/50 leading-relaxed">{children}</td>
+  ),
+  blockquote: ({ children }: any) => (
+    <blockquote className="border-l-2 border-brand-primary/40 pl-3 my-1 text-surface-4 italic">{children}</blockquote>
+  ),
+  hr: () => <hr className="border-surface-3 my-3" />,
 }
 
 export function MessageBubble({ message, isStreaming }: Props) {
@@ -259,11 +162,18 @@ export function MessageBubble({ message, isStreaming }: Props) {
             )}
           </div>
           <div className="text-sm text-neutral">
-            {isStreaming && !message.content ? (
+            {message.isLoading ? (
+              <div className="flex items-center gap-2 text-sm text-surface-4">
+                <div className="w-3.5 h-3.5 border-2 border-brand-primary border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                Creating Anki cards...
+              </div>
+            ) : isStreaming && !message.content ? (
               <span className="inline-block w-0.5 h-4 bg-brand-primary animate-pulse align-middle" />
             ) : (
               <>
-                {renderMarkdown(cleanChatText(message.content))}
+                <Streamdown mode={isStreaming ? "streaming" : "static"} components={CHAT_MD_COMPONENTS}>
+                  {cleanChatText(message.content)}
+                </Streamdown>
                 {isStreaming && (
                   <span className="inline-block w-0.5 h-4 bg-brand-primary animate-pulse ml-0.5 align-middle" />
                 )}
@@ -282,6 +192,27 @@ export function MessageBubble({ message, isStreaming }: Props) {
               {copied ? <Check size={12} /> : <Copy size={12} />}
               {copied ? "Copied" : "Copy"}
             </button>
+          </div>
+        )}
+
+        {/* Sources */}
+        {message.sources && message.sources.length > 0 && (
+          <div className="mt-1">
+            <div className="text-[11px] text-surface-4 mb-1.5 font-medium">Sources</div>
+            <div className="flex flex-col gap-1">
+              {message.sources.map((source, i) => (
+                <a
+                  key={i}
+                  href={source.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-start gap-1.5 text-[11px] text-brand-primary hover:text-brand-primary/80 transition-colors leading-relaxed"
+                >
+                  <span className="flex-shrink-0 mt-0.5 text-surface-4">{i + 1}.</span>
+                  <span className="truncate">{source.title || source.url}</span>
+                </a>
+              ))}
+            </div>
           </div>
         )}
       </div>

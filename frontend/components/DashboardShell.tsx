@@ -2,9 +2,12 @@
 import { useState } from "react"
 import { IconRail } from "@/components/sidebar/IconRail"
 import { ChatListPanel } from "@/components/sidebar/ChatListPanel"
+import { TutorialModal } from "@/components/tutorial/TutorialModal"
+import { useTutorial } from "@/components/tutorial/useTutorial"
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const { open: tutorialOpen, dismiss: dismissTutorial } = useTutorial()
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-surface-0">
@@ -28,6 +31,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 min-w-0 flex flex-col bg-surface-1 overflow-hidden">
         {children}
       </main>
+
+      <TutorialModal open={tutorialOpen} onClose={dismissTutorial} />
     </div>
   )
 }

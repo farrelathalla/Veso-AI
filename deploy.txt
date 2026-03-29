@@ -1,0 +1,141 @@
+  VPS Deployment — Full Guide
+
+  Step 1 — Get a free domain
+
+  Use https://www.duckdns.org — completely free, no credit card, no monthly check-in.
+
+  1. Go to duckdns.org → sign in with Google
+  2. Pick a subdomain, e.g. veso-api → creates veso-api.duckdns.org
+  3. Set the IP to 103.103.22.207
+  4. Done — DNS propagates in ~5 minutes
+
+  You'll get: https://veso-api.duckdns.org pointing to your VPS.
+
+  ---
+  Step 2 — SCP backend to VPS
+
+  Run this from your Windows machine (Git Bash or PowerShell with OpenSSH):
+
+  # Create the target directory on VPS first
+  ssh user@103.103.22.207 "mkdir -p /var/www/veso-ai-backend"
+
+  # Copy the entire backend folder (replace 'user' with your VPS username, e.g. root or ubuntu)
+  scp -r "C:/Users/Farrel's Laptop/Desktop/chatbot/Veso-AI/backend/." user@103.103.22.207:/var/www/veso-ai-backend/
+
+  If you use a .pem key file:
+  scp -i your-key.pem -r "C:/Users/Farrel's Laptop/Desktop/chatbot/Veso-AI/backend/."
+  user@103.103.22.207:/var/www/veso-ai-backend/
+
+  ---
+  Step 3 — Create .env on the VPS
+
+  SSH into your VPS and create the env file:
+
+  ssh user@103.103.22.207
+  nano /var/www/veso-ai-backend/.env
+
+  Paste:
+  NVIDIA_API_KEY=nvapi-...
+  SUPABASE_URL=https://xxx.supabase.co
+  SUPABASE_SERVICE_KEY=eyJ...
+  NEXTJS_URL=https://your-vercel-app.vercel.app
+  NEXTAUTH_SECRET=your-secret-here
+  ENVIRONMENT=production
+
+  Save with Ctrl+O, Ctrl+X.
+
+  ---
+  Step 4 — Build and run Docker on VPS
+
+  cd /var/www/veso-ai-backend
+
+  # Build (takes ~5-8 min first time — downloads embedding model)
+  docker build -t veso-ai-backend .
+
+  # Run — maps VPS port 8003 → container port 8000
+  docker run -d \
+    --name veso-ai \
+    --restart unless-stopped \
+    -p 8003:8000 \
+    --env-file .env \
+    -v /var/www/veso-ai-backend/chroma_db:/app/chroma_db \
+    -v /var/www/veso-ai-backend/knowledge_base:/app/knowledge_base \
+    veso-ai-backend
+
+  The two -v mounts keep ChromaDB and uploaded files persistent across container restarts.
+
+  Verify it's running:
+  curl http://localhost:8003/api/health
+  # → {"status":"ok"}
+
+  ---
+  Step 5 — Install Caddy for HTTPS
+
+  You need a reverse proxy for HTTPS (browsers require it for Authorization headers). Caddy is the easiest —
+  auto-provisions Let's Encrypt certs.
+
+  # Install Caddy (Ubuntu/Debian)
+  sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o
+  /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee
+  /etc/apt/sources.list.d/caddy-stable.list
+  sudo apt update && sudo apt install caddy
+
+  Create /etc/caddy/Caddyfile:
+  veso-api.duckdns.org {
+      reverse_proxy localhost:8003
+  }
+
+  Start Caddy:
+  sudo systemctl enable caddy
+  sudo systemctl restart caddy
+
+  Caddy automatically gets and renews the SSL cert. Your API is now live at https://veso-api.duckdns.org.
+
+  ---
+  Step 6 — Update frontend env on Vercel
+
+  In your Vercel project dashboard → Settings → Environment Variables:
+
+  NEXT_PUBLIC_API_URL = https://veso-api.duckdns.org
+
+  And update your backend .env on VPS:
+  NEXTJS_URL = https://your-vercel-app.vercel.app
+
+  Also update backend/app/main.py CORS — the _origins list already reads from settings.nextjs_url so this is handled
+  automatically.
+
+  ---
+  Step 7 — Trigger RAG ingest
+
+  After deploy, index your knowledge base files:
+
+  curl -X POST https://veso-api.duckdns.org/api/rag/ingest \
+    -H "Authorization: Bearer <your-google-token>"
+
+  Or do it from the frontend by calling the endpoint once you're logged in.
+
+  ---
+  Useful commands on VPS
+
+  # View logs
+  docker logs veso-ai -f
+
+  # Restart after code update
+  docker stop veso-ai && docker rm veso-ai
+  docker build -t veso-ai-backend .
+  docker run -d --name veso-ai --restart unless-stopped \
+    -p 8003:8000 --env-file .env \
+    -v /var/www/veso-ai-backend/chroma_db:/app/chroma_db \
+    -v /var/www/veso-ai-backend/knowledge_base:/app/knowledge_base \
+    veso-ai-backend
+
+  # Check Caddy logs
+  sudo journalctl -u caddy -f
+
+  # Open firewall ports if needed (ufw)
+  sudo ufw allow 80
+  sudo ufw allow 443
+  sudo ufw allow 22
+  sudo ufw enable

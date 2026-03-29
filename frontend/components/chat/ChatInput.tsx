@@ -9,11 +9,13 @@ interface Props {
   onSend: (message: string, options: { useRag: boolean; useSearch: boolean; attachedFile?: string }) => void
   onSummary?: (text: string) => void
   onAnkiCreated?: (deck: { id: string; title: string; card_count: number }, userMessage: { topic: string; attachedFile?: string }) => void
+  onAnkiStart?: (userMessage: { topic: string; attachedFile?: string }) => void
+  onAnkiError?: () => void
   disabled?: boolean
   conversationId?: string
 }
 
-export function ChatInput({ onSend, onSummary, onAnkiCreated, disabled, conversationId }: Props) {
+export function ChatInput({ onSend, onSummary, onAnkiCreated, onAnkiStart, onAnkiError, disabled, conversationId }: Props) {
   const { data: session } = useSession()
   const router = useRouter()
   const [text, setText] = useState("")
@@ -29,18 +31,24 @@ export function ChatInput({ onSend, onSummary, onAnkiCreated, disabled, conversa
 
   const handleAnkiGenerate = async () => {
     if (!session || !text.trim() || generatingAnki) return
-    // Capture before state is cleared
     const topic = text.trim()
     const fileAttached = attachedFile ?? undefined
     setAnkiError(null)
     setGeneratingAnki(true)
+    // Clear input state immediately so user sees it "sent"
+    setText("")
+    setAnkiMode(false)
+    setAttachedFile(null)
+    if (textareaRef.current) textareaRef.current.style.height = "auto"
+    // Fire onAnkiStart immediately — shows user message + loading placeholder
+    onAnkiStart?.({ topic, attachedFile: fileAttached })
     try {
       const result = await generateAnki({ topic, max_cards: 20, conversation_id: conversationId, attached_file: fileAttached }, session)
-      if (result.error) { setAnkiError(result.error); return }
-      setText("")
-      setAnkiMode(false)
-      setAttachedFile(null)
-      if (textareaRef.current) textareaRef.current.style.height = "auto"
+      if (result.error) {
+        setAnkiError(result.error)
+        onAnkiError?.()
+        return
+      }
       if (onAnkiCreated) {
         onAnkiCreated({ id: result.deck_id, title: result.title, card_count: result.card_count }, { topic, attachedFile: fileAttached })
       } else {
@@ -48,6 +56,7 @@ export function ChatInput({ onSend, onSummary, onAnkiCreated, disabled, conversa
       }
     } catch {
       setAnkiError("Failed to generate cards. Try again.")
+      onAnkiError?.()
     } finally {
       setGeneratingAnki(false)
     }
@@ -185,6 +194,7 @@ export function ChatInput({ onSend, onSummary, onAnkiCreated, disabled, conversa
             onClick={() => fileInputRef.current?.click()}
             disabled={isDisabled}
             title="Upload PDF or TXT"
+            data-tutorial="file-upload"
             className={[
               "w-8 h-8 flex items-center justify-center rounded-md transition-colors disabled:opacity-40",
               attachedFile
@@ -200,6 +210,7 @@ export function ChatInput({ onSend, onSummary, onAnkiCreated, disabled, conversa
             onClick={() => { setAnkiMode(s => !s); setUseSearch(false); setAnkiError(null) }}
             disabled={isDisabled}
             title="Generate Anki cards"
+            data-tutorial="anki-toggle"
             className={[
               "w-8 h-8 flex items-center justify-center rounded-md transition-colors disabled:opacity-40",
               ankiMode
@@ -215,6 +226,7 @@ export function ChatInput({ onSend, onSummary, onAnkiCreated, disabled, conversa
             onClick={() => setUseSearch(s => !s)}
             disabled={isDisabled}
             title="Enable web search"
+            data-tutorial="search-toggle"
             className={[
               "w-8 h-8 flex items-center justify-center rounded-md transition-colors disabled:opacity-40",
               useSearch

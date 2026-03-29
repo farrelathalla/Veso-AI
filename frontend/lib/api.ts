@@ -47,6 +47,7 @@ export function streamChat(
   onMeta: (meta: { conversation_id: string }) => void,
   onDone: () => void,
   onError?: (err: string) => void,
+  onSources?: (sources: { title: string; url: string }[]) => void,
 ): () => void {
   const ctrl = new AbortController()
 
@@ -83,6 +84,7 @@ export function streamChat(
             const json = JSON.parse(line.slice(6))
             if (json.type === "meta") onMeta(json)
             if (json.type === "token") onToken(json.content)
+            if (json.type === "sources") onSources?.(json.sources)
             if (json.type === "done") onDone()
           } catch {
             // ignore malformed SSE line

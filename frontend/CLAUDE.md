@@ -217,6 +217,7 @@ raw content string
 - `{{c?}}` and any other `{{...}}` → removed
 - `§1`, `§2`, `§` → removed
 - Lines matching `/need cards\? ask/i`, `/make anki cards from/i`, `/batch.?generate/i` → line removed
+- Lines consisting entirely of 3+ em-dashes or en-dashes (e.g. `–––––––––`) → line removed (LLM horizontal rules)
 - Double spaces introduced by removals → collapsed
 
 **`ankiDeck` rendering** — checked before markdown path. Renders a clickable `Link` card with `BookOpen` icon, title, card count, and "Tap to view your Anki deck" label.
@@ -315,6 +316,7 @@ When navigating between cards (`AnkiDeckViewer`), the `key` prop on `<AnkiCard>`
 - **`router.replace` vs `router.push`** — use `replace` when changing the URL for the same logical page (e.g., after a new conversation is created), so the back button doesn't loop
 - **Tailwind v4 opacity modifiers** — `bg-brand-primary/10` syntax works correctly since tokens are CSS custom properties
 - **`useEffect` dependency on `session`** — always include `session` in dependency arrays for effects that fetch from the backend, otherwise they won't fire on login
+- **Tab-focus re-fetch guard** — `[id]/page.tsx` uses a `fetchedForId` ref to skip re-fetching messages when `session` gets a new object reference on tab focus. Always use this pattern for conversation loaders — never depend on `session` alone as it changes on every NextAuth re-validation.
 - **`ChatListPanel` refresh** — the list refreshes on `pathname` change (via `useEffect`) so newly created conversations appear automatically
 - **SSE navigation** — always navigate to `/chat/<id>` on the `done` event, never on `meta`. Navigating on `meta` unmounts the streaming component and drops buffered tokens.
 - **`DashboardShell` is a Client Component** — do not add `await auth()` or other async server calls inside it. Auth guard logic belongs in `(dashboard)/layout.tsx`.

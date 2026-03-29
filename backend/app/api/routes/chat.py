@@ -1,4 +1,5 @@
 import json
+import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from app.api.deps import current_user
@@ -16,6 +17,22 @@ from app.services.chat_service import (
 from app.rag.vector_store import retrieve_context, retrieve_from_source
 from app.services.llm import stream_response, generate_title
 from app.agents.search_agent import search_and_answer
+
+# Patterns that indicate prompt injection / jailbreak attempts
+_INJECTION_RE = re.compile(
+    r"(ignore\s+(all\s+|previous\s+|prior\s+|above\s+|your\s+)?(instructions?|prompts?|rules?|guidelines?)|"
+    r"forget\s+(everything|all|your\s+instructions?|previous\s+instructions?)|"
+    r"you\s+are\s+now\s+|"
+    r"act\s+as\s+(DAN|an?\s+(unrestricted|unfiltered|different|new)\s+(ai|model|assistant))|"
+    r"jailbreak|"
+    r"do\s+anything\s+now|"
+    r"stay\s+in\s+character|"
+    r"pretend\s+(you\s+are|to\s+be)|"
+    r"your\s+(true|real)\s+(self|purpose|identity))",
+    re.IGNORECASE,
+)
+
+_INJECTION_REPLY = "I'm Veso AI, a medical education assistant. I can only help with medical topics."
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -55,6 +72,17 @@ async def chat_stream(request: Request, req: ChatRequest, user=Depends(current_u
     if len(req.message) > 4000:
         return {"error": "Message too long (max 4000 chars)"}
 
+    # Detect prompt injection attempts — short-circuit before touching LLM
+    if _INJECTION_RE.search(req.message):
+        async def _refusal_generator():
+            yield f"data: {json.dumps({'type': 'meta', 'conversation_id': 'blocked'})}\n\n"
+            yield f"data: {json.dumps({'type': 'token', 'content': _INJECTION_REPLY})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'conversation_id': 'blocked'})}\n\n"
+        return StreamingResponse(_refusal_generator(), media_type="text/event-stream")
+
+    # Wrap user message in delimiters so LLM treats it as untrusted input
+    safe_message = f"[USER INPUT START]\n{req.message}\n[USER INPUT END]"
+
     # 1. Get or create conversation — must happen before streaming starts
     conv_id = get_or_create_conversation(user["id"], req.conversation_id)
 
@@ -75,7 +103,7 @@ async def chat_stream(request: Request, req: ChatRequest, user=Depends(current_u
             rag_context = retrieve_context(req.message, k=4)
 
     # 5. Build message list
-    messages = build_messages_with_context(history[:-1], req.message, rag_context)
+    messages = build_messages_with_context(history[:-1], safe_message, rag_context)
 
     # 6. Stream response
     full_response: list[str] = []
@@ -85,10 +113,19 @@ async def chat_stream(request: Request, req: ChatRequest, user=Depends(current_u
         yield f"data: {json.dumps({'type': 'meta', 'conversation_id': conv_id})}\n\n"
 
         try:
-            stream = search_and_answer(req.message, history[:-1]) if req.use_search else stream_response(messages)
+            if req.use_search:
+                stream, sources = await search_and_answer(req.message, history[:-1])
+            else:
+                stream = stream_response(messages)
+                sources: list[dict] = []
+
             async for token in stream:
                 full_response.append(token)
                 yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+
+            # Emit sources before done if search was used
+            if sources:
+                yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
 
             # Persist assistant reply
             complete = "".join(full_response)
